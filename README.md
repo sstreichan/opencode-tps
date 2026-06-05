@@ -15,7 +15,7 @@ The meter appears in the bottom-right corner of the TUI and updates dynamically 
 ### Via OpenCode CLI
 
 ```bash
-opencode plugin @williamcr01/opencode-tps
+ opencode plugin @sstreichan/opencode-tps
 ```
 
 ### Via npm
@@ -25,7 +25,7 @@ opencode plugin @williamcr01/opencode-tps
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@williamcr01/opencode-tps"]
+  "plugin": ["@sstreichan/opencode-tps"]
 }
 ```
 
@@ -33,7 +33,7 @@ then
 
 ```bash
 cd ~/.opencode
-npm install @williamcr01/opencode-tps
+ npm install @sstreichan/opencode-tps
 ```
 
 ## Requirements
@@ -49,6 +49,10 @@ The plugin hooks into OpenCode's message streaming events to calculate real-time
 - Calculates TPS based on a 5-second rolling window
 - Displays "-" when no tokens are being generated
 - Automatically clears when streaming completes or errors occur
+
+## Credits
+
+Original plugin by [williamcr01](https://github.com/williamcr01).
 
 ## License
 
