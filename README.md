@@ -52,7 +52,11 @@ The plugin hooks into OpenCode's message streaming events to calculate real-time
 
 ## Credits
 
-Original plugin by [williamcr01](https://github.com/williamcr01).
+This plugin merges features from:
+
+- Original by [williamcr01](https://github.com/williamcr01)
+- Subagent tracking by [SirTenzin](https://github.com/SirTenzin)
+- Post-response stats & real token count by [mesaleh](https://github.com/mesaleh)
 
 ## License
 

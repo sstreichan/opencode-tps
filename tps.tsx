@@ -1,10 +1,23 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo } from "solid-js"
+import { createSignal, createMemo, For, Show } from "solid-js"
 import type { TuiPlugin } from "@opencode-ai/plugin/tui"
 
 interface StreamSample {
   tokens: number
   timestamp: number
+}
+
+interface MessageStats {
+  firstDeltaTs: number
+  totalEstTokens: number
+  maxLiveTps: number
+  minLiveTps: number
+  frozen?: { avg: number; max: number; min: number }
+}
+
+interface SessionMeta {
+  parentID?: string
+  title?: string
 }
 
 interface PartDeltaEvent {
@@ -20,18 +33,33 @@ interface PartDeltaEvent {
 
 const tui: TuiPlugin = async (api, _options, _meta) => {
   const streamSamples = new Map<string, StreamSample[]>()
+  const messageStats = new Map<string, MessageStats>()
+  const sessionMeta = new Map<string, SessionMeta>()
+  const lastKnownTps = new Map<string, number>()
+  const completedSessions = new Set<string>()
 
   const [version, setVersion] = createSignal(0)
   const [tick, setTick] = createSignal(0)
+  const [metaVersion, setMetaVersion] = createSignal(0)
 
   const LIVE_STALE_MS = 1500
   const SAMPLE_WINDOW_MS = 5000
   const SINGLE_SAMPLE_MIN_MS = 250
   const SINGLE_SAMPLE_MAX_MS = 1000
+  const WARMUP_MS = 3000
+  const BYTES_PER_TOKEN_ESTIMATE = 5.5
 
   function estimateTokens(text: string): number {
     const byteLen = new TextEncoder().encode(text).length
-    return Math.max(1, Math.ceil(byteLen / 5))
+    return Math.max(1, Math.ceil(byteLen / BYTES_PER_TOKEN_ESTIMATE))
+  }
+
+  function readOutputTokens(info: unknown): number | undefined {
+    if (!info || typeof info !== "object") return undefined
+    const tokens = (info as { tokens?: { output?: unknown } }).tokens
+    const output = tokens?.output
+    if (typeof output === "number" && isFinite(output) && output > 0) return output
+    return undefined
   }
 
   function formatTps(value: number): string {
@@ -84,7 +112,103 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     const durationMs = activeDurationMs(active)
     if (durationMs <= 0) return -1
 
-    return (totalTokens / durationMs) * 1000
+    const value = (totalTokens / durationMs) * 1000
+    lastKnownTps.set(sessionID, value)
+    return value
+  }
+
+  function displayTps(sessionID: string): number {
+    const live = calcLiveTps(sessionID)
+    if (live >= 0) return live
+    return lastKnownTps.get(sessionID) ?? -1
+  }
+
+  function titleForSession(sessionID: string): string {
+    const meta = sessionMeta.get(sessionID)
+    if (!meta?.title) return sessionID.slice(0, 8)
+    return meta.title.replace(/\s*\(@\w+ subagent\)\s*$/, "").trim() || meta.title
+  }
+
+  function isCompleted(sessionID: string): boolean {
+    if (completedSessions.has(sessionID)) return true
+    const status = api.state.session.status(sessionID)
+    return status?.type === "idle"
+  }
+
+  function dropSession(sessionID: string) {
+    sessionMeta.delete(sessionID)
+    streamSamples.delete(sessionID)
+    lastKnownTps.delete(sessionID)
+    messageStats.delete(sessionID)
+    completedSessions.delete(sessionID)
+  }
+
+  function pruneIdleSiblings(parentID: string, exceptID: string) {
+    let changed = false
+    for (const [sid, meta] of sessionMeta) {
+      if (sid === exceptID) continue
+      if (meta.parentID !== parentID) continue
+      if (isCompleted(sid)) {
+        dropSession(sid)
+        changed = true
+      }
+    }
+    if (changed) {
+      setMetaVersion((v) => v + 1)
+      setVersion((v) => v + 1)
+    }
+  }
+
+  function registerSubagent(info: { id: string; parentID?: string; title?: string }, options?: { prune?: boolean }) {
+    sessionMeta.set(info.id, { parentID: info.parentID, title: info.title })
+    if (options?.prune && info.parentID) pruneIdleSiblings(info.parentID, info.id)
+    setMetaVersion((v) => v + 1)
+  }
+
+  async function fetchSessionMeta(sessionID: string) {
+    if (sessionMeta.has(sessionID)) return
+    sessionMeta.set(sessionID, {})
+    try {
+      const res = await api.client.session.get({ sessionID })
+      const info = (res as any)?.data
+      if (info?.id) registerSubagent(info)
+    } catch {
+      // ignore; retry on next delta if cleared
+    }
+  }
+
+  async function seedChildren(parentID: string) {
+    try {
+      const res = await api.client.session.children({ sessionID: parentID })
+      const list = (res as any)?.data
+      if (!Array.isArray(list)) return
+
+      const activeChildren = await Promise.all(
+        list
+          .filter((child: any) => child?.id)
+          .map(async (child: any) => {
+            try {
+              const msgs = await api.client.session.messages({ sessionID: child.id })
+              const data = (msgs as any)?.data ?? []
+              const lastAssistant = [...data].reverse().find((m: any) => m?.info?.role === "assistant")
+              const completed = lastAssistant?.info?.time?.completed
+              if (completed) {
+                completedSessions.add(child.id)
+                return null
+              }
+              return child
+            } catch {
+              return child
+            }
+          }),
+      )
+
+      for (const child of activeChildren) {
+        if (child) registerSubagent(child)
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const unsubDelta = api.event.on("message.part.delta" as unknown as "message.part.delta", (evt: PartDeltaEvent) => {
@@ -95,9 +219,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     if (evt.properties.field !== "text") return
 
     const parts = api.state.part(evt.properties.messageID)
-    const hasTextOrReasoning = parts?.some(
-      (p) => p.type === "text" || p.type === "reasoning",
-    )
+    const hasTextOrReasoning = parts?.some((p) => p.type === "text" || p.type === "reasoning")
     if (!hasTextOrReasoning) return
 
     const deltaText = evt.properties.delta
@@ -113,6 +235,20 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     }
     samples.push({ tokens, timestamp: now })
 
+    let stats = messageStats.get(sessionID)
+    if (!stats || stats.frozen) {
+      stats = {
+        firstDeltaTs: now,
+        totalEstTokens: 0,
+        maxLiveTps: -Infinity,
+        minLiveTps: Infinity,
+      }
+      messageStats.set(sessionID, stats)
+    }
+    stats.totalEstTokens += tokens
+
+    if (!sessionMeta.has(sessionID)) fetchSessionMeta(sessionID)
+
     setVersion((v) => v + 1)
   })
 
@@ -123,7 +259,29 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     const sessionID = info.sessionID
 
     if (info.time.completed) {
+      const stats = messageStats.get(sessionID)
+      if (stats && !stats.frozen) {
+        const durationMs = Math.max(1, (info.time.completed as number) - stats.firstDeltaTs)
+
+        const realTokens = readOutputTokens(info)
+        const tokensForAvg = realTokens !== undefined ? realTokens : stats.totalEstTokens
+        const avg = (tokensForAvg / durationMs) * 1000
+
+        let max = stats.maxLiveTps
+        let min = stats.minLiveTps
+        if (!isFinite(max) || !isFinite(min)) {
+          max = avg
+          min = avg
+        } else if (realTokens !== undefined && stats.totalEstTokens > 0) {
+          const scale = realTokens / stats.totalEstTokens
+          max = max * scale
+          min = min * scale
+        }
+
+        stats.frozen = { avg, max, min }
+      }
       streamSamples.delete(sessionID)
+      completedSessions.add(sessionID)
       setVersion((v) => v + 1)
     }
   })
@@ -140,6 +298,18 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     }
   })
 
+  const unsubSessionCreated = api.event.on("session.created" as any, (evt: any) => {
+    const info = evt.properties?.info
+    if (!info?.id) return
+    registerSubagent(info, { prune: true })
+  })
+
+  const unsubSessionUpdated = api.event.on("session.updated" as any, (evt: any) => {
+    const info = evt.properties?.info
+    if (!info?.id) return
+    registerSubagent(info)
+  })
+
   const interval = setInterval(() => {
     const now = Date.now()
     const cutoff = now - SAMPLE_WINDOW_MS
@@ -149,6 +319,14 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
         streamSamples.set(sessionID, pruned)
       }
     }
+    for (const [sessionID, stats] of messageStats) {
+      if (stats.frozen) continue
+      if (now - stats.firstDeltaTs < WARMUP_MS) continue
+      const liveTps = calcLiveTps(sessionID)
+      if (liveTps <= 0) continue
+      if (liveTps > stats.maxLiveTps) stats.maxLiveTps = liveTps
+      if (liveTps < stats.minLiveTps) stats.minLiveTps = liveTps
+    }
     setTick((t) => t + 1)
   }, 1000)
 
@@ -156,26 +334,107 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     unsubDelta()
     unsubUpdated()
     unsubPartUpdated()
+    unsubSessionCreated()
+    unsubSessionUpdated()
     clearInterval(interval)
+    messageStats.clear()
+    sessionMeta.clear()
+    lastKnownTps.clear()
+    streamSamples.clear()
+    completedSessions.clear()
   })
 
   api.slots.register({
+    order: 350,
     slots: {
       session_prompt_right(ctx, props) {
         const sessionID = props.session_id
 
-        const liveTps = createMemo(() => {
+        const display = createMemo(() => {
           version()
           tick()
-          return calcLiveTps(sessionID)
+
+          const stats = messageStats.get(sessionID)
+          if (stats?.frozen) {
+            const { avg, max, min } = stats.frozen
+            return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`
+          }
+
+          const live = displayTps(sessionID)
+          if (live >= 0) return `tok/s ${formatTps(live)}`
+          return "tok/s -"
         })
 
         const textMuted = ctx.theme.current.textMuted
 
         return (
           <text fg={textMuted}>
-            TPS {formatTps(liveTps())}
+            {display()}
           </text>
+        )
+      },
+
+      sidebar_content(ctx, props) {
+        const parentID = props.session_id
+        if (!sessionMeta.has(parentID)) fetchSessionMeta(parentID)
+        seedChildren(parentID)
+
+        const entries = createMemo(() => {
+          version()
+          tick()
+          metaVersion()
+
+          const parentTps = displayTps(parentID)
+          const parentTitle = titleForSession(parentID) || "Main"
+
+          const children: { sessionID: string; label: string; tps: number }[] = []
+          for (const [sid, meta] of sessionMeta) {
+            if (sid === parentID) continue
+            if (meta.parentID !== parentID) continue
+            children.push({
+              sessionID: sid,
+              label: titleForSession(sid),
+              tps: displayTps(sid),
+            })
+          }
+          children.sort((a, b) => a.label.localeCompare(b.label))
+
+          if (children.length === 0) return null
+
+          const rows = [
+            { sessionID: parentID, label: parentTitle, tps: parentTps },
+            ...children,
+          ]
+
+          const live = rows.map((r) => r.tps).filter((t) => t >= 0)
+          const avg = live.length > 0 ? live.reduce((a, b) => a + b, 0) / live.length : -1
+
+          return { rows, avg }
+        })
+
+        const theme = () => ctx.theme.current
+
+        return (
+          <Show when={entries()}>
+            {(data) => (
+              <box>
+                <box flexDirection="row" justifyContent="space-between">
+                  <text fg={theme().text}>
+                    <b>TPS</b>
+                  </text>
+                  <text fg={theme().textMuted}>avg {formatTps(data().avg)}</text>
+                </box>
+                <For each={data().rows}>
+                  {(row) => (
+                    <box flexDirection="row" justifyContent="space-between">
+                      <text fg={theme().textMuted}>{row.label}</text>
+                      <text fg={theme().textMuted}>{formatTps(row.tps)}</text>
+                    </box>
+                  )}
+                </For>
+              </box>
+            )}
+          </Show>
         )
       },
     },

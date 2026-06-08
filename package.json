@@ -1,6 +1,6 @@
 {
   "name": "@sstreichan/opencode-tps",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "description": "Display live tokens-per-second (TPS) meter in OpenCode TUI",
   "type": "module",
   "exports": {
@@ -34,6 +34,14 @@
     {
       "name": "williamcr01",
       "url": "https://github.com/williamcr01"
+    },
+    {
+      "name": "SirTenzin",
+      "url": "https://github.com/SirTenzin"
+    },
+    {
+      "name": "mesaleh",
+      "url": "https://github.com/mesaleh"
     }
   ],
   "license": "MIT",
