@@ -1,0 +1,11 @@
+# Conventional commit template
+# <type>(<scope>): <description>
+#
+# Types: feat, fix, chore, docs, style, refactor, perf, test, ci, build
+# Scope: optional, e.g. (tui), (meter)
+#
+# Examples:
+# feat(tui): add TPS history graph
+# fix(meter): correct flickering on update
+# docs: update README with usage examples
+
