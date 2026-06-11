@@ -1,5 +1,4 @@
 /** @jsxImportSource @opentui/solid */
-import { createMemo } from "solid-js";
 import { displayTps } from "./tps-calc";
 import { formatTps } from "./tps-calc";
 import { titleForSession, fetchSessionMeta, seedChildren } from "./session";
@@ -13,24 +12,28 @@ export function registerSlots(state: PluginState) {
         const sessionID = props.session_id;
         const [getVersion] = state.version;
         const [getTick] = state.tick;
-
-        const display = createMemo(() => {
-          getVersion();
-          getTick();
-
-          const stats = state.messageStats.get(sessionID);
-          if (stats?.frozen) {
-            const { avg, max, min } = stats.frozen;
-            return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`;
-          }
-
-          const live = displayTps(state, sessionID);
-          if (live >= 0) return `tok/s ${formatTps(live)}`;
-          return "tok/s -";
-        });
-
         const textMuted = ctx.theme.current.textMuted;
-        return <text fg={textMuted}>{display as any}</text>;
+
+        return (
+          <text fg={textMuted}>
+            {
+              (() => {
+                getVersion();
+                getTick();
+
+                const stats = state.messageStats.get(sessionID);
+                if (stats?.frozen) {
+                  const { avg, max, min } = stats.frozen;
+                  return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`;
+                }
+
+                const live = displayTps(state, sessionID);
+                if (live >= 0) return `tok/s ${formatTps(live)}`;
+                return "tok/s -";
+              }) as any
+            }
+          </text>
+        );
       },
 
       sidebar_content(ctx, props) {
