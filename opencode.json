@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "command": {
+    "check": {
+      "description": "Type-check the plugin with tsc --noEmit",
+      "template": "Run `tsc --noEmit` to type-check all TypeScript files in the project. Report any errors."
+    },
+    "test": {
+      "description": "Run the full test suite with vitest",
+      "template": "Run `npx vitest run` to execute all unit tests. Report results: pass/fail count and any failures."
+    },
+    "test:watch": {
+      "description": "Run tests in watch mode",
+      "template": "Run `npx vitest` in watch mode so tests re-run on file changes."
+    },
+    "lint": {
+      "description": "Lint source files with ESLint",
+      "template": "Run `npx eslint src/ test/` to check for lint errors. If there are errors, explain them."
+    },
+    "lint:fix": {
+      "description": "Auto-fix lint issues",
+      "template": "Run `npx eslint --fix src/ test/` to auto-fix any fixable lint issues, then report remaining unfixable errors."
+    },
+    "format": {
+      "description": "Check formatting with Prettier",
+      "template": "Run `npx prettier --check src/ test/` to verify formatting. If files are misformatted, list them."
+    },
+    "build": {
+      "description": "Full build: compile, test, and lint",
+      "template": "Run the full validation pipeline sequentially: `npm run build`, then `npx vitest run`, then `npx eslint src/ test/`. Stop on first failure and report what failed."
+    }
+  }
+}

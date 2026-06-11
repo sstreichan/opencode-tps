@@ -4,10 +4,10 @@
   "description": "Display live tokens-per-second (TPS) meter in OpenCode TUI",
   "type": "module",
   "exports": {
-    "./tui": "./tps.tsx"
+    "./tui": "./dist/tps.js"
   },
   "files": [
-    "tps.tsx",
+    "dist/",
     "README.md",
     "LICENSE"
   ],
@@ -47,10 +47,22 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sstreichan/opencode-tps.git"
+    "url": "git+https://github.com/sstreichan/opencode-tps.git"
   },
   "bugs": {
     "url": "https://github.com/sstreichan/opencode-tps/issues"
   },
-  "homepage": "https://github.com/sstreichan/opencode-tps#readme"
+  "homepage": "https://github.com/sstreichan/opencode-tps#readme",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release": "standard-version",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "standard-version": "^9.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  }
 }
