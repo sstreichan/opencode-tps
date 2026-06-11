@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createMemo, For, Show } from "solid-js";
+import { createMemo } from "solid-js";
 import { displayTps } from "./tps-calc";
 import { formatTps } from "./tps-calc";
 import { titleForSession, fetchSessionMeta, seedChildren } from "./session";
@@ -30,7 +30,7 @@ export function registerSlots(state: PluginState) {
         });
 
         const textMuted = ctx.theme.current.textMuted;
-        return <text fg={textMuted}>{display()}</text>;
+        return <text fg={textMuted}>{display as any}</text>;
       },
 
       sidebar_content(ctx, props) {
@@ -42,67 +42,70 @@ export function registerSlots(state: PluginState) {
         const [getTick] = state.tick;
         const [getMetaVersion] = state.metaVersion;
 
-        const entries = createMemo(() => {
-          getVersion();
-          getTick();
-          getMetaVersion();
-
-          const parentTps = displayTps(state, parentID);
-          const parentTitle = titleForSession(state, parentID) || "Main";
-
-          const children: { sessionID: string; label: string; tps: number }[] =
-            [];
-          for (const [sid, meta] of state.sessionMeta) {
-            if (sid === parentID) continue;
-            if (meta.parentID !== parentID) continue;
-            children.push({
-              sessionID: sid,
-              label: titleForSession(state, sid),
-              tps: displayTps(state, sid),
-            });
-          }
-          children.sort((a, b) => a.label.localeCompare(b.label));
-
-          if (children.length === 0) return null;
-
-          const rows = [
-            { sessionID: parentID, label: parentTitle, tps: parentTps },
-            ...children,
-          ];
-          const live = rows.map((r) => r.tps).filter((t) => t >= 0);
-          const avg =
-            live.length > 0
-              ? live.reduce((a, b) => a + b, 0) / live.length
-              : -1;
-
-          return { rows, avg };
-        });
-
-        const theme = () => ctx.theme.current;
+        const theme = ctx.theme.current;
 
         return (
-          <Show when={entries()}>
-            {(data) => (
-              <box>
-                <box flexDirection="row" justifyContent="space-between">
-                  <text fg={theme().text}>
-                    <b>TPS</b>
-                  </text>
-                  <text fg={theme().textMuted}>
-                    avg {formatTps(data().avg)}
-                  </text>
-                </box>
-                <For each={data().rows}>
-                  {(row) => (
+          <box>
+            {
+              (() => {
+                getVersion();
+                getTick();
+                getMetaVersion();
+
+                const parentTps = displayTps(state, parentID);
+                const parentTitle = titleForSession(state, parentID) || "Main";
+
+                const children: {
+                  sessionID: string;
+                  label: string;
+                  tps: number;
+                }[] = [];
+                for (const [sid, meta] of state.sessionMeta) {
+                  if (sid === parentID) continue;
+                  if (meta.parentID !== parentID) continue;
+                  children.push({
+                    sessionID: sid,
+                    label: titleForSession(state, sid),
+                    tps: displayTps(state, sid),
+                  });
+                }
+                children.sort((a, b) => a.label.localeCompare(b.label));
+
+                if (children.length === 0) return null;
+
+                const rows = [
+                  {
+                    sessionID: parentID,
+                    label: parentTitle,
+                    tps: parentTps,
+                  },
+                  ...children,
+                ];
+                const live = rows.map((r) => r.tps).filter((t) => t >= 0);
+                const avg =
+                  live.length > 0
+                    ? live.reduce((a, b) => a + b, 0) / live.length
+                    : -1;
+
+                return (
+                  <>
                     <box flexDirection="row" justifyContent="space-between">
-                      <text fg={theme().textMuted}>{row.label}</text>
-                      <text fg={theme().textMuted}>{formatTps(row.tps)}</text>
+                      <text fg={theme.text}>
+                        <b>TPS</b>
+                      </text>
+                      <text fg={theme.textMuted}>avg {formatTps(avg)}</text>
                     </box>
-                  )}
-                </For>
-              </box>
-            )}
-          </Show>
+                    {rows.map((row) => (
+                      <box flexDirection="row" justifyContent="space-between">
+                        <text fg={theme.textMuted}>{row.label}</text>
+                        <text fg={theme.textMuted}>{formatTps(row.tps)}</text>
+                      </box>
+                    ))}
+                  </>
+                );
+              }) as any
+            }
+          </box>
         );
       },
     },
