@@ -1,6 +1,6 @@
 {
   "name": "@sstreichan/opencode-tps",
-  "version": "0.1.8",
+  "version": "0.1.7",
   "description": "Display live tokens-per-second (TPS) meter in OpenCode TUI",
   "type": "module",
   "exports": {
