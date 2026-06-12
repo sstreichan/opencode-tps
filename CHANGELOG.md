@@ -2,13 +2,6 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-### [0.1.9](https://github.com/sstreichan/opencode-tps/compare/v0.1.8...v0.1.9) (2026-06-11)
-
-
-### Bug Fixes
-
-* replace createMemo with function-child pattern for slot reactivity ([6845e82](https://github.com/sstreichan/opencode-tps/commit/6845e823cebb42ff8fc0f0a59698a891631b112e))
-
 ### [0.1.8](https://github.com/sstreichan/opencode-tps/compare/v0.1.7...v0.1.8) (2026-06-11)
 
 ### [0.1.7](https://github.com/sstreichan/opencode-tps/compare/v0.1.1...v0.1.7) (2026-06-11)
