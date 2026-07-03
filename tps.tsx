@@ -395,9 +395,17 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
         const t = ctx.theme.current
 
         return (
-          <text fg={displayInfo().isLive ? t.success : t.textMuted}>
-            {displayInfo().label}
-          </text>
+          <box
+            borderStyle="rounded"
+            border
+            borderColor={displayInfo().isLive ? t.success : t.borderSubtle}
+            paddingX={1}
+            paddingY={0}
+          >
+            <text fg={displayInfo().isLive ? t.success : t.textMuted}>
+              {displayInfo().label}
+            </text>
+          </box>
         )
       },
 
