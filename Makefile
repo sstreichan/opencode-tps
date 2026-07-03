@@ -3,9 +3,10 @@
 install:
 	npm install
 
-# Bracket-balance check on tps.tsx. Naive (counts strings/comments too),
-# but catches obvious editing mismatches. Not a linter.
+# Type-check then bracket-balance check. Type-check first because
+# tsc catches structural errors; bracket-check catches editing mismatches.
 check:
+	npx tsc --noEmit
 	@o=$$(tr -cd '{' < tps.tsx | wc -c); c=$$(tr -cd '}' < tps.tsx | wc -c); \
 	 p=$$(tr -cd '(' < tps.tsx | wc -c); r=$$(tr -cd ')' < tps.tsx | wc -c); \
 	 b=$$(tr -cd '[' < tps.tsx | wc -c); e=$$(tr -cd ']' < tps.tsx | wc -c); \
@@ -27,7 +28,9 @@ version:
 	 sed -i 's/"version": "[^"]*"/"version": "'"$$v"'"/' package.json; \
 	 echo "-> $$v"
 
-publish: version
+# Gate publish on check + version. Deliberately does not commit —
+# version bump is a pre-publish side effect, not a replacement for git flow.
+publish: check version
 	npm publish
 
 # Remove local artifacts. bun.lock included for safety (historical usage).

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Bracket check
+        run: |
+          o=$(tr -cd '{' < tps.tsx | wc -c)
+          c=$(tr -cd '}' < tps.tsx | wc -c)
+          p=$(tr -cd '(' < tps.tsx | wc -c)
+          r=$(tr -cd ')' < tps.tsx | wc -c)
+          b=$(tr -cd '[' < tps.tsx | wc -c)
+          e=$(tr -cd ']' < tps.tsx | wc -c)
+          if [ "$o" = "$c" ] && [ "$p" = "$r" ] && [ "$b" = "$e" ]; then
+            echo "Brackets OK: {}={} ()=$p []=$b"
+          else
+            echo "MISMATCH: {}={}/$c ()=$p/$r []=$b/$e"
+            exit 1
+          fi

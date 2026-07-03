@@ -1,6 +1,6 @@
 {
   "name": "@sstreichan/opencode-tps",
-  "version": "0.1.27",
+  "version": "0.1.28-dirty",
   "description": "Display live tokens-per-second (TPS) meter in OpenCode TUI",
   "type": "module",
   "exports": {
@@ -13,6 +13,13 @@
   ],
   "engines": {
     "opencode": ">=1.3.14"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.x"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "*",

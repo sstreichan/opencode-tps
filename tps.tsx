@@ -36,6 +36,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
   const messageStats = new Map<string, MessageStats>()
   const sessionMeta = new Map<string, SessionMeta>()
   const lastKnownTps = new Map<string, number>()
+  const completedStats = new Map<string, NonNullable<MessageStats["frozen"]>>()
   const completedSessions = new Set<string>()
 
   const [version, setVersion] = createSignal(0)
@@ -140,6 +141,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     streamSamples.delete(sessionID)
     lastKnownTps.delete(sessionID)
     messageStats.delete(sessionID)
+    completedStats.delete(sessionID)
     completedSessions.delete(sessionID)
   }
 
@@ -279,6 +281,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
         }
 
         stats.frozen = { avg, max, min }
+        completedStats.set(sessionID, { avg, max, min })
       }
       streamSamples.delete(sessionID)
       completedSessions.add(sessionID)
@@ -361,7 +364,17 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
           }
 
           const live = displayTps(sessionID)
-          if (live >= 0) return `tok/s ${formatTps(live)}`
+          if (live >= 0) {
+            const prev = completedStats.get(sessionID)
+            if (prev) return `tok/s ${formatTps(live)} · avg ${formatTps(prev.avg)}`
+            return `tok/s ${formatTps(live)}`
+          }
+
+          const prev = completedStats.get(sessionID)
+          if (prev) {
+            const { avg, max, min } = prev
+            return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`
+          }
           return "tok/s -"
         })
 
@@ -416,15 +429,15 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
 
         return (
           <Show when={entries()}>
-            {(data) => (
+            {(data: NonNullable<ReturnType<typeof entries>>) => (
               <box>
                 <box flexDirection="row" justifyContent="space-between">
                   <text fg={theme().text}>
                     <b>TPS</b>
                   </text>
-                  <text fg={theme().textMuted}>avg {formatTps(data().avg)}</text>
+                  <text fg={theme().textMuted}>avg {formatTps(data.avg)}</text>
                 </box>
-                <For each={data().rows}>
+                <For each={data.rows}>
                   {(row) => (
                     <box flexDirection="row" justifyContent="space-between">
                       <text fg={theme().textMuted}>{row.label}</text>
