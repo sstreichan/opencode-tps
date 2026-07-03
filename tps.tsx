@@ -367,6 +367,14 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
       session_prompt_right(ctx, props) {
         const sessionID = props.session_id
 
+        function tpsLabel(value: number, _max?: number, _min?: number): string {
+          const main = `tok/s ${formatTps(value)}`
+          if (_max !== undefined && _min !== undefined && (_max !== value || _min !== value)) {
+            return `${main} · ↑${formatTps(_max)} ↓${formatTps(_min)}`
+          }
+          return main
+        }
+
         const displayInfo = createMemo(() => {
           version()
           tick()
@@ -374,20 +382,18 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
           const stats = messageStats.get(sessionID)
           if (stats?.frozen) {
             const { avg, max, min } = stats.frozen
-            return { label: `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`, isLive: false }
+            return { label: tpsLabel(avg, max, min), isLive: false }
           }
 
           const live = displayTps(sessionID)
           if (live >= 0) {
-            const prev = completedStats.get(sessionID)
-            if (prev) return { label: `tok/s ${formatTps(live)} · avg ${formatTps(prev.avg)}`, isLive: true }
             return { label: `tok/s ${formatTps(live)}`, isLive: true }
           }
 
           const prev = completedStats.get(sessionID)
           if (prev) {
             const { avg, max, min } = prev
-            return { label: `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`, isLive: false }
+            return { label: tpsLabel(avg, max, min), isLive: false }
           }
           return { label: "tok/s -", isLive: false }
         })
