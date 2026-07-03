@@ -39,6 +39,17 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
   const completedStats = new Map<string, NonNullable<MessageStats["frozen"]>>()
   const completedSessions = new Set<string>()
 
+  const KV_KEY = "opencode-tps:completed-stats"
+  // ponytail: KV grows unbounded (~60 bytes/session), cap at N entries if monitoring shows bloat
+  try {
+    const persisted = api.kv.get<Record<string, { avg: number; max: number; min: number }>>(KV_KEY, {})
+    for (const [sid, stats] of Object.entries(persisted)) {
+      if (stats && typeof stats === "object" && "avg" in stats && "max" in stats && "min" in stats) {
+        completedStats.set(sid, stats as { avg: number; max: number; min: number })
+      }
+    }
+  } catch { /* kv not available */ }
+
   const [version, setVersion] = createSignal(0)
   const [tick, setTick] = createSignal(0)
   const [metaVersion, setMetaVersion] = createSignal(0)
@@ -143,6 +154,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     messageStats.delete(sessionID)
     completedStats.delete(sessionID)
     completedSessions.delete(sessionID)
+    // note: KV still holds the entry; on reload it reappears (conscious trade-off)
   }
 
   function pruneIdleSiblings(parentID: string, exceptID: string) {
@@ -282,6 +294,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
 
         stats.frozen = { avg, max, min }
         completedStats.set(sessionID, { avg, max, min })
+        try { api.kv.set(KV_KEY, Object.fromEntries(completedStats)) } catch { /* ignore */ }
       }
       streamSamples.delete(sessionID)
       completedSessions.add(sessionID)
@@ -344,6 +357,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
     sessionMeta.clear()
     lastKnownTps.clear()
     streamSamples.clear()
+    completedStats.clear()
     completedSessions.clear()
   })
 
