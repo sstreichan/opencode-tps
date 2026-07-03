@@ -277,6 +277,49 @@ cat /tmp/my-tui-plugin-loaded.log   # expect: one line with current timestamp
 | Output | single self-contained `dist/index.js` | `dist/<entry>.js` + `dist/src/*.js` |
 | Why external deps | n/a | must share host's Solid.js runtime |
 
+## Local source vs published artifact
+
+The reference example above documents the v0.1.5 *published* artifact
+(the modular tsc build installed via `npm install
+@sstreichan/opencode-tps`). The **local source** in this repo is
+intentionally a different shape:
+
+| Aspect | Published v0.1.5 (cache) | Local source (this repo) |
+|---|---|---|
+| Entry file | `dist/tps.js` (27 lines, modular) | `tps.tsx` (447 lines, monolith) |
+| Module layout | `dist/src/*.js` (8 modules) | none — single file |
+| Build | `tsc` → `dist/` | none — ships raw `.tsx` |
+| `package.json` `exports` | `{ "./tui": "./dist/tps.js" }` | `{ "./tui": "./tps.tsx" }` |
+| `package.json` `files` | `["dist/", "README.md", "LICENSE"]` | `["tps.tsx", "README.md", "LICENSE"]` |
+| `package.json` scripts | `build` / `test` / `prepublishOnly` | none |
+| `devDependencies` | `typescript` + `vitest` | none |
+
+Both files claim `version: "0.1.5"`, but they are distinct artifacts. A
+`git clone` + `npm publish` from this repo would publish the raw `.tsx`
+shipment, not the modular `dist/` documented above. The local source is
+the "reverted" state per the user-confirmed decision below.
+
+## Local operations (Makefile)
+
+The local repo uses a `Makefile` for version bumping and publishing —
+distinct from the published v0.1.5's `npm scripts`:
+
+```makefile
+make check     # bracket-balance sanity check on tps.tsx
+make version   # bumps version = <last-tag-minor>.<git-rev-count>
+make publish   # version + npm publish
+make clean     # rm -rf node_modules bun.lock
+make ls
+```
+
+`make version` reads the last git tag, takes `MAJOR.MINOR` from it, and
+appends the commit count: `v0.1.X` where `X = git rev-list --count HEAD`.
+This auto-versioning was the subject of the reverted `176792e` /
+`59fcce8` / `bdef7fd` / `6796820` / `b77de9b` / `3214722` / `741ef56` /
+`9f299da` / `18fbe36` / `d74fedb` / `5128646` / `0d7e373` / `6710a3d`
+chain, but the `Makefile` itself survived the revert and is the current
+operational entry point.
+
 ## Decisions and open questions
 
 ### Resolved (user-confirmed 2026-06-16)
@@ -286,18 +329,23 @@ cat /tmp/my-tui-plugin-loaded.log   # expect: one line with current timestamp
    state for this repo. Do not attempt re-modularization.
 
 2. **Modular attempt did not work** (reason recorded at `bd39ecf` →
-   reverted at `5fefbab`). Specific failure mode not yet captured. The
-   published v0.1.5 IS the modular artifact, but the user-side experience
-   was negative. Treat modularization as a known-failed approach **for this
-   specific plugin**; the pattern may still work for new TuiPlugins with
-   different shapes.
+   reverted at `5fefbab`). The reverted commit also added (and removed):
+   `AGENTS.md` (125 lines), `Makefile` (31 lines — re-added by the
+   revert and still present), `opencode.json` (34 lines), `package-lock.json`
+   (5260 lines), `test/{sampling,session,tps-calc}.test.ts` (393 lines
+   of vitest tests), and `tsconfig.json` (19 lines). Specific failure
+   mode not yet captured. The published v0.1.5 IS the modular artifact,
+   but the user-side experience was negative. Treat modularization as a
+   known-failed approach **for this specific plugin**; the pattern may
+   still work for new TuiPlugins with different shapes.
 
-3. **JSX vs no-JSX: undecided.** The published v0.1.5 uses JSX
+3. **JSX vs no-JSX: resolved (use JSX).** The published v0.1.5 uses JSX
    (`@opentui/solid/jsx-runtime` in `slots.js`); the current local source
-   uses JSX (`<For>`, `<Show>`). Both work. The intermediate "remove
+   uses JSX (`<For>`, `<Show>`, `createMemo`). The intermediate "remove
    solid-js deps" attempt at `5ab88fe` (revert at `9d29948`) shows the
-   trade-off was explored and the no-JSX path was abandoned. **Recommendation:
-   use JSX** (matches current local source and the published artifact).
+   trade-off was explored and the no-JSX path was abandoned.
+   **Resolution: use JSX** (matches current local source and the
+   published artifact).
 
 4. **`opencode plugin list` behavior: user error, not a CLI bug.**
    Running `opencode plugin list` was a misuse of the command; it added
@@ -311,6 +359,11 @@ cat /tmp/my-tui-plugin-loaded.log   # expect: one line with current timestamp
   `opencode run --print-logs --log-level DEBUG` (timestamp
   2026-06-16T09:21:00Z, run id `db379566`, project
   `f6f355ac80501547c5c05d6a91d83a0b345be147`).
+- Re-verified load (re-load test, plan-update pass): same artifact, fresh
+  run, `message="Plugin initialized"` at 2026-06-16T11:04:23Z, run id
+  `55b759c2`, project `f6f355ac80501547c5c05d6a91d83a0b345be147`,
+  `opencode` 1.17.7. Model call succeeded (`pong` response). `opencode.json`
+  restored from backup after the test.
 - Verified build artifact: `dist/tps.js` (27 lines, default export
   `TuiPluginSpec`, imports from `./src/hooks|slots|cleanup`).
 - Verified JSX preservation: `dist/src/slots.js` contains
