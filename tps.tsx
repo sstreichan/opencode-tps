@@ -367,36 +367,36 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
       session_prompt_right(ctx, props) {
         const sessionID = props.session_id
 
-        const display = createMemo(() => {
+        const displayInfo = createMemo(() => {
           version()
           tick()
 
           const stats = messageStats.get(sessionID)
           if (stats?.frozen) {
             const { avg, max, min } = stats.frozen
-            return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`
+            return { label: `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`, isLive: false }
           }
 
           const live = displayTps(sessionID)
           if (live >= 0) {
             const prev = completedStats.get(sessionID)
-            if (prev) return `tok/s ${formatTps(live)} · avg ${formatTps(prev.avg)}`
-            return `tok/s ${formatTps(live)}`
+            if (prev) return { label: `tok/s ${formatTps(live)} · avg ${formatTps(prev.avg)}`, isLive: true }
+            return { label: `tok/s ${formatTps(live)}`, isLive: true }
           }
 
           const prev = completedStats.get(sessionID)
           if (prev) {
             const { avg, max, min } = prev
-            return `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`
+            return { label: `tok/s ${formatTps(avg)} avg · ↑${formatTps(max)} ↓${formatTps(min)}`, isLive: false }
           }
-          return "tok/s -"
+          return { label: "tok/s -", isLive: false }
         })
 
-        const textMuted = ctx.theme.current.textMuted
+        const t = ctx.theme.current
 
         return (
-          <text fg={textMuted}>
-            {display()}
+          <text fg={displayInfo().isLive ? t.success : t.textMuted}>
+            {displayInfo().label}
           </text>
         )
       },
@@ -414,14 +414,16 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
           const parentTps = displayTps(parentID)
           const parentTitle = titleForSession(parentID) || "Main"
 
-          const children: { sessionID: string; label: string; tps: number }[] = []
+          const children: { sessionID: string; label: string; tps: number; live: boolean }[] = []
           for (const [sid, meta] of sessionMeta) {
             if (sid === parentID) continue
             if (meta.parentID !== parentID) continue
+            const tps = displayTps(sid)
             children.push({
               sessionID: sid,
               label: titleForSession(sid),
-              tps: displayTps(sid),
+              tps,
+              live: tps >= 0,
             })
           }
           children.sort((a, b) => a.label.localeCompare(b.label))
@@ -429,7 +431,7 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
           if (children.length === 0) return null
 
           const rows = [
-            { sessionID: parentID, label: parentTitle, tps: parentTps },
+            { sessionID: parentID, label: parentTitle, tps: parentTps, live: parentTps >= 0 },
             ...children,
           ]
 
@@ -439,23 +441,24 @@ const tui: TuiPlugin = async (api, _options, _meta) => {
           return { rows, avg }
         })
 
-        const theme = () => ctx.theme.current
+        const t = ctx.theme.current
+        type SidebarData = NonNullable<ReturnType<typeof entries>>
 
         return (
           <Show when={entries()}>
-            {(data: NonNullable<ReturnType<typeof entries>>) => (
+            {(data: SidebarData) => (
               <box>
                 <box flexDirection="row" justifyContent="space-between">
-                  <text fg={theme().text}>
+                  <text fg={t.text}>
                     <b>TPS</b>
                   </text>
-                  <text fg={theme().textMuted}>avg {formatTps(data.avg)}</text>
+                  <text fg={t.textMuted}>avg {formatTps(data.avg)}</text>
                 </box>
                 <For each={data.rows}>
                   {(row) => (
                     <box flexDirection="row" justifyContent="space-between">
-                      <text fg={theme().textMuted}>{row.label}</text>
-                      <text fg={theme().textMuted}>{formatTps(row.tps)}</text>
+                      <text fg={t.textMuted}>{row.label}</text>
+                      <text fg={row.live ? t.success : t.textMuted}>{formatTps(row.tps)}</text>
                     </box>
                   )}
                 </For>
